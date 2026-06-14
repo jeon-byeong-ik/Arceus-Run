@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>아르세우스 파티 · 형제 미니게임 대결</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{width:100%;height:100%;overflow:hidden;background:#0b0f1a;
+    font-family:'Trebuchet MS','Segoe UI',system-ui,sans-serif;color:#fff;touch-action:none}
+  #game{position:fixed;inset:0;display:block}
+  .overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:18px;z-index:10;
+    background:radial-gradient(circle at 50% 30%,rgba(40,60,120,.55),rgba(8,10,22,.92))}
+  .hidden{display:none!important}
+  h1{font-size:clamp(28px,8.5vw,68px);letter-spacing:2px;
+    background:linear-gradient(90deg,#ffe27a,#fff,#9fd8ff,#caa6ff);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 24px rgba(255,255,255,.18);margin-bottom:6px}
+  .sub{opacity:.9;font-size:clamp(13px,3.6vw,18px);margin-bottom:20px;max-width:600px;line-height:1.55}
+  .btn{cursor:pointer;border:none;border-radius:999px;font-weight:800;font-size:clamp(16px,4.6vw,22px);
+    padding:14px 36px;color:#0b1020;background:linear-gradient(90deg,#ffe27a,#ffd24d);
+    box-shadow:0 8px 26px rgba(255,210,80,.35);transition:transform .08s,filter .15s}
+  .btn:active{transform:scale(.95);filter:brightness(1.05)}
+  .btn.ghost{background:rgba(255,255,255,.12);color:#fff;box-shadow:none;border:1px solid rgba(255,255,255,.25)}
+  .row{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+
+  /* character select */
+  #select .panes{display:flex;gap:14px;width:100%;max-width:980px}
+  .pane{flex:1;background:rgba(255,255,255,.05);border:2px solid rgba(255,255,255,.12);border-radius:18px;padding:12px}
+  .pane h2{font-size:clamp(16px,4.5vw,24px);margin-bottom:4px}
+  .pane .pick{font-size:13px;opacity:.8;min-height:18px;margin-bottom:8px}
+  .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+  .swatch{aspect-ratio:1;border-radius:10px;cursor:pointer;position:relative;
+    border:2px solid rgba(255,255,255,.15);display:flex;align-items:flex-end;justify-content:center;
+    font-size:9px;padding-bottom:3px;overflow:hidden;transition:transform .08s}
+  .swatch:active{transform:scale(.92)}
+  .swatch.sel{border-color:#fff;box-shadow:0 0 0 2px #fff,0 0 16px rgba(255,255,255,.5)}
+  .swatch span{position:relative;z-index:2;text-shadow:0 1px 2px #000;font-weight:700}
+
+  #topbar{position:fixed;top:0;left:0;right:0;z-index:7;display:flex;justify-content:space-between;
+    align-items:center;padding:8px 12px;pointer-events:none}
+  #muteBtn{pointer-events:auto;cursor:pointer;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.25);
+    color:#fff;border-radius:999px;padding:6px 14px;font-size:14px}
+  .credit{position:fixed;bottom:6px;left:0;right:0;text-align:center;font-size:10px;opacity:.45;z-index:11;pointer-events:none}
+  #champName{font-size:clamp(28px,8vw,60px)}
+  .how{font-size:clamp(14px,3.8vw,20px);opacity:.92;margin-top:8px}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- TITLE -->
+<div class="overlay" id="title">
+  <h1>아르세우스 파티</h1>
+  <div class="sub">형제 둘이 한 화면에서 즐기는 <b>미니게임 대결</b>!<br>
+    달리기·반응속도·잡기·줄다리기·풍선불기를 <b>5판 3선승</b>으로 겨뤄요.<br>
+    각자 자기 쪽(<b style="color:#9fbfff">왼쪽 1P</b> / <b style="color:#ffb0c6">오른쪽 2P</b>) 화면을 누르면 돼요.</div>
+  <button class="btn" id="startBtn">대결 시작</button>
+  <div class="row"><button class="btn ghost" id="howBtn">미니게임 소개</button></div>
+  <div class="sub hidden" id="howText" style="margin-top:16px;text-align:left">
+    🏃 <b>마하 대시</b> — 빠르게 연타해 결승선까지 먼저!<br>
+    ⚡ <b>반응 결투</b> — "지금!" 뜨면 먼저 탭 (미리 누르면 실격)<br>
+    🎯 <b>잡아라!</b> — 몬스터볼 나오면 탭, 빨간 폭탄은 피하기<br>
+    🪢 <b>줄다리기</b> — 연타로 가운데 공을 내 쪽으로!<br>
+    🎈 <b>풍선 불기</b> — 크게 불되 터지기 직전에 멈추기</div>
+</div>
+
+<!-- SELECT -->
+<div class="overlay hidden" id="select">
+  <h1 style="font-size:clamp(22px,6vw,42px)">캐릭터 선택</h1>
+  <div class="sub" style="margin-bottom:12px">각자 아르세우스 타입(폼)을 골라요</div>
+  <div class="panes">
+    <div class="pane"><h2 style="color:#9fbfff">1P</h2><div class="pick" id="pick1">미선택</div><div class="grid" id="grid1"></div></div>
+    <div class="pane"><h2 style="color:#ffb0c6">2P</h2><div class="pick" id="pick2">미선택</div><div class="grid" id="grid2"></div></div>
+  </div>
+  <div class="row" style="margin-top:18px">
+    <button class="btn ghost" id="backBtn">뒤로</button>
+    <button class="btn" id="goBtn">대결 시작!</button>
+  </div>
+</div>
+
+<!-- CHAMPION -->
+<div class="overlay hidden" id="champ">
+  <div id="champName">🏆</div>
+  <div class="sub" id="champSub"></div>
+  <div class="row">
+    <button class="btn" id="rematchBtn">한 판 더!</button>
+    <button class="btn ghost" id="changeBtn">캐릭터 변경</button>
+  </div>
+</div>
+
+<div id="topbar" class="hidden"><div></div><div id="muteBtn">🔊 소리</div></div>
+<div class="credit">원작 영감 · 오리지널 팬 아트/사운드 · 비공식 패러디</div>
+
+<script>
+"use strict";
+/* ============================================================
+   ARCEUS PARTY — 2-player minigame pack for siblings.
+   Best-of-5 series. All art = original Arceus fan-art (SVG).
+   All audio = original chiptune (Web Audio API).
+   ============================================================ */
+const cv=document.getElementById('game'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){ DPR=Math.min(window.devicePixelRatio||1,2);
+  W=window.innerWidth;H=window.innerHeight;cv.width=W*DPR;cv.height=H*DPR;
+  cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0); }
+window.addEventListener('resize',resize);resize();
+
+const TYPES=[
+  ['노말','#c9a24b','#3fae7a'],['불꽃','#f0742f','#ffd24d'],['물','#5a8cf0','#aee3ff'],
+  ['전기','#f6c92b','#fff39b'],['풀','#7cc24a','#caf59b'],['얼음','#8fd6da','#e6ffff'],
+  ['격투','#d24a3a','#ffd2a0'],['독','#b246b2','#f0b0ff'],['땅','#e0b85f','#fff0c0'],
+  ['비행','#a79bf0','#dff0ff'],['에스퍼','#f55f86','#ffd0e0'],['벌레','#a7b53a','#e8f59b'],
+  ['바위','#c0a64a','#ffe9a8'],['고스트','#7a6bb0','#cdbfff'],['드래곤','#7a52f5','#c0a8ff'],
+  ['악','#6f5a4a','#caa98a'],['강철','#b7bcd6','#ffffff'],['페어리','#f29ab8','#ffe0ec'],
+];
+const P1COL='#5a8cff', P2COL='#ff6e96';
+
+/* ============================================================
+   SPRITE (front 3/4 Arceus, original fan-art)
+   ============================================================ */
+function shade(hex,amt){let r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  const f=amt<0?0:255,p=Math.abs(amt);r=Math.round(r+(f-r)*p);g=Math.round(g+(f-g)*p);b=Math.round(b+(f-b)*p);
+  return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');}
+function limb(hx,hy,upAng,loAng,l1,l2,w,fill,stroke,boot,hoof){
+  return `<g transform="translate(${hx},${hy}) rotate(${upAng})">
+    <path d="M ${-w},0 C ${-w},${l1*0.5} ${-w*0.75},${l1*0.85} ${-w*0.7},${l1} L ${w*0.7},${l1} C ${w*0.75},${l1*0.85} ${w},${l1*0.5} ${w},0 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    <g transform="translate(0,${l1-1}) rotate(${loAng})">
+      <path d="M ${-w*0.7},0 C ${-w*0.7},${l2*0.5} ${-w*0.6},${l2*0.85} ${-w*0.6},${l2} L ${w*0.6},${l2} C ${w*0.6},${l2*0.85} ${w*0.7},${l2*0.5} ${w*0.7},0 Z" fill="${boot}" stroke="${shade(boot,-0.2)}" stroke-width="1.4"/>
+      <path d="M ${-w*0.65},${l2-2} C ${-w*0.7},${l2+5} ${-w*0.35},${l2+8} 0,${l2+8} C ${w*0.35},${l2+8} ${w*0.7},${l2+5} ${w*0.65},${l2-2} Z" fill="${hoof}" stroke="${shade(hoof,-0.35)}" stroke-width="1.1"/>
+    </g></g>`;}
+function spikeAt(x,y,deg,len,w,fill,stroke){return `<g transform="translate(${x},${y}) rotate(${deg})">
+    <path d="M ${-w},0 C ${-w*0.6},${-len*0.5} ${-w*0.25},${-len*0.85} 0,${-len} C ${w*0.25},${-len*0.85} ${w*0.6},${-len*0.5} ${w},0 C ${w*0.55},7 ${-w*0.55},7 ${-w},0 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/></g>`;}
+function buildArceus(wheel,gem,phase,u){
+  const ph=phase%6, bob=[0,-3,-5,-3,0,2][ph];
+  const A=[[6,-12,-8,12,3,-7,-4,8],[14,-18,-14,18,8,-11,-9,13],[-2,-8,-2,8,-1,-4,0,5],
+    [-10,-4,4,4,-6,-2,3,3],[6,-12,-8,12,3,-7,-4,8],[12,-15,-11,15,6,-9,-6,11]][ph];
+  const wLight=shade(wheel,0.55),wDark=shade(wheel,-0.45),gLight=shade(gem,0.5),gDark=shade(gem,-0.4);
+  const body='#f4f3f0',sh='#cfd3dc',dk='#b0b6c4',boot='#454b5c',mask='#3c4150';
+  const cx=150,cy=190,rx=80,ry=36,rot=-20*Math.PI/180;
+  function onRing(t){const ex=rx*Math.cos(t),ey=ry*Math.sin(t);
+    const x=cx+ex*Math.cos(rot)-ey*Math.sin(rot),y=cy+ex*Math.sin(rot)+ey*Math.cos(rot);
+    return {x,y,deg:Math.atan2(y-cy,x-cx)*180/Math.PI+90};}
+  const tips=[Math.PI*0.75,Math.PI*0.25,Math.PI*1.25,Math.PI*1.75].map(onRing);
+  let sBack='',sFront='',gems='';
+  tips.forEach((p,i)=>{const s=spikeAt(p.x,p.y,p.deg,46,10,'url(#wg_'+u+')',shade(wheel,-0.3));
+    if(i<2) sFront+=s; else sBack+=s;
+    gems+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="5" fill="url(#gm_${u})" stroke="${gDark}" stroke-width="1.1"/>`;});
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 330"><defs>
+    <radialGradient id="bd_${u}" cx="0.42" cy="0.3" r="0.85"><stop offset="0" stop-color="#fff"/><stop offset="0.6" stop-color="${body}"/><stop offset="1" stop-color="${sh}"/></radialGradient>
+    <linearGradient id="wg_${u}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${wLight}"/><stop offset="0.5" stop-color="${wheel}"/><stop offset="1" stop-color="${wDark}"/></linearGradient>
+    <radialGradient id="gm_${u}" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="${gLight}"/><stop offset="0.6" stop-color="${gem}"/><stop offset="1" stop-color="${gDark}"/></radialGradient>
+    <linearGradient id="ne_${u}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${sh}"/><stop offset="0.5" stop-color="${body}"/><stop offset="1" stop-color="#fff"/></linearGradient></defs>
+    <g transform="translate(0,${bob})">
+    <ellipse cx="150" cy="298" rx="78" ry="14" fill="rgba(0,0,0,0.18)"/>
+    ${limb(126,205,A[6],A[7],30,26,6,sh,dk,shade(boot,0.18),shade(wheel,-0.05))}
+    ${limb(176,205,A[4],A[5],30,26,6,sh,dk,shade(boot,0.18),shade(wheel,-0.05))}
+    <path d="M 88,182 C 56,162 36,164 24,182 C 42,178 50,186 48,202 C 58,190 72,186 84,194 C 82,182 86,178 94,180 Z" fill="url(#ne_${u})" stroke="${dk}" stroke-width="1.5"/>
+    <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="url(#wg_${u})" stroke-width="8" opacity="0.9" transform="rotate(-20 ${cx} ${cy})"/>
+    ${sBack}
+    <path d="M 92,178 C 92,150 120,138 152,142 C 182,146 206,160 210,182 C 213,200 200,216 176,222 C 146,229 112,224 98,206 C 90,196 90,188 92,178 Z" fill="url(#bd_${u})" stroke="${dk}" stroke-width="2.5"/>
+    <path d="M 104,206 C 130,222 168,220 192,206 C 180,222 122,224 104,206 Z" fill="${sh}" opacity="0.65"/>
+    <path d="M 110,152 C 140,142 172,146 196,162 C 172,152 140,150 116,160 Z" fill="#fff" opacity="0.85"/>
+    <path d="M 192,168 C 206,134 212,104 220,86 C 229,74 244,78 244,96 C 242,122 230,156 206,184 C 200,178 196,174 192,168 Z" fill="url(#ne_${u})" stroke="${dk}" stroke-width="2.5"/>
+    <g transform="translate(240,80) rotate(16)">
+      <path d="M -2,-8 C -18,-26 -42,-32 -58,-24 C -42,-14 -22,-8 -4,-2 Z" fill="${sh}" stroke="${dk}" stroke-width="1.8"/>
+      <path d="M 2,-2 C -14,-14 -36,-16 -50,-6 C -34,2 -14,6 2,8 Z" fill="${body}" stroke="${dk}" stroke-width="1.8"/>
+      <path d="M -12,-9 C -5,-21 13,-23 27,-15 C 40,-7 52,3 54,12 C 49,19 35,19 26,17 C 8,19 -14,15 -16,-2 C -16,-6 -13,-8 -12,-9 Z" fill="url(#ne_${u})" stroke="${dk}" stroke-width="2.5"/>
+      <path d="M -8,-8 C 1,-16 15,-15 24,-7 C 32,-1 30,8 19,11 C 4,13 -12,8 -12,-3 C -12,-6 -10,-7 -8,-8 Z" fill="${mask}"/>
+      <path d="M 7,-10 C 15,-11 23,-7 28,-1 C 23,4 14,4 8,1 C 3,-2 3,-7 7,-10 Z" fill="url(#gm_${u})" opacity="0.95"/>
+      <ellipse cx="16" cy="-4" rx="4.2" ry="3" fill="${gLight}"/><circle cx="14.2" cy="-5.4" r="1.3" fill="#fff"/>
+      <path d="M -6,-7 C -19,-16 -32,-16 -42,-9 C -29,-8 -16,-3 -4,-1 Z" fill="url(#wg_${u})" stroke="${shade(wheel,-0.3)}" stroke-width="1" opacity="0.9"/>
+    </g>
+    ${sFront}${gems}
+    ${limb(118,210,A[2],A[3],32,28,7,'url(#bd_'+u+')',dk,boot,wheel)}
+    ${limb(172,212,A[0],A[1],32,28,7,'url(#bd_'+u+')',dk,boot,wheel)}
+    </g></svg>`;}
+const spriteCache={};
+function ensureSprites(ti){ if(spriteCache[ti]) return spriteCache[ti];
+  const t=TYPES[ti],frames=[];
+  for(let i=0;i<6;i++){const img=new Image();
+    img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(buildArceus(t[1],t[2],i,'t'+ti+'f'+i));frames.push(img);}
+  spriteCache[ti]=frames;return frames;}
+function spriteDataURL(ti){const t=TYPES[ti];
+  return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(buildArceus(t[1],t[2],2,'p'+ti));}
+const SW=150, SH=SW*330/300;
+function drawArceus(x,footY,scale,ti,phase,running){
+  const fr=ensureSprites(ti), fi=running?(Math.floor(phase*1.4)%6):2, img=fr[fi];
+  const w=SW*scale,h=SH*scale, fY=(292/330)*h;
+  if(img&&img.complete&&img.naturalWidth) ctx.drawImage(img,x-w*0.5,footY-fY,w,h);
+  else {ctx.fillStyle='#e8e8ee';ctx.beginPath();ctx.ellipse(x,footY-h*0.35,w*0.28,h*0.18,0,0,Math.PI*2);ctx.fill();}
+}
+
+/* ============================================================
+   AUDIO — original chiptune + SFX
+   ============================================================ */
+const Audio2=(()=>{let ac=null,master,musicGain,muted=false,started=false;
+  function init(){if(ac)return;ac=new(window.AudioContext||window.webkitAudioContext)();
+    master=ac.createGain();master.gain.value=0.9;master.connect(ac.destination);
+    musicGain=ac.createGain();musicGain.gain.value=0.14;musicGain.connect(master);}
+  function tone(f,t,dur,type='square',gain=0.2,dest){o=ac.createOscillator();const g=ac.createGain();
+    o.type=type;o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime(0,t);
+    g.gain.linearRampToValueAtTime(gain,t+0.01);g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
+    o.connect(g);g.connect(dest||master);o.start(t);o.stop(t+dur+0.02);}
+  let o;
+  function noise(t,dur,gain,dest,hp=4000){const b=ac.createBuffer(1,ac.sampleRate*dur,ac.sampleRate),d=b.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);
+    const s=ac.createBufferSource();s.buffer=b;const g=ac.createGain();g.gain.value=gain;
+    const f=ac.createBiquadFilter();f.type='highpass';f.frequency.value=hp;s.connect(f);f.connect(g);g.connect(dest||master);s.start(t);}
+  const LEAD=[[0,1],[7,1],[12,1],[7,1],[9,1],[4,1],[7,1],[2,1],[5,1],[12,1],[5,1],[9,1],[7,2],[-3,1],[0,1]];
+  const BASS=[0,0,-5,-5,-7,-7,-3,-3], ROOT=261.63;
+  function st(n){return ROOT*Math.pow(2,n/12);}
+  let bi=0,t0=0,loopId=null;
+  function loop(){ if(!ac)return; const bpm=138,beat=60/bpm,now=ac.currentTime;
+    while(t0<now+0.7){const n=LEAD[bi%LEAD.length];
+      if(!muted){tone(st(n[0])*2,t0,beat*n[1]*0.9,'square',0.09,musicGain);
+        tone(st(BASS[bi%BASS.length])/2,t0,beat*0.9,'triangle',0.15,musicGain);
+        if(bi%2===0)noise(t0,0.03,0.04,musicGain);}
+      t0+=beat*n[1];bi++;}
+    loopId=setTimeout(loop,120);}
+  return {
+    start(){init();if(ac.state==='suspended')ac.resume();if(!started){started=true;t0=ac.currentTime+0.06;loop();}},
+    setMuted(m){muted=m;if(musicGain)musicGain.gain.value=m?0:0.14;},isMuted(){return muted;},
+    sfx(n){if(!ac||muted)return;const t=ac.currentTime;
+      if(n==='tap')tone(520+Math.random()*60,t,0.05,'square',0.09);
+      else if(n==='climb')tone(380+Math.random()*200,t,0.05,'square',0.10);
+      else if(n==='score'){tone(740,t,0.06,'square',0.18);tone(1100,t+0.05,0.08,'square',0.18);}
+      else if(n==='foul'){tone(200,t,0.22,'sawtooth',0.2);tone(140,t+0.12,0.24,'sawtooth',0.18);}
+      else if(n==='pop'){noise(t,0.12,0.3,master,800);tone(300,t,0.12,'square',0.18);tone(120,t+0.06,0.18,'sawtooth',0.18);}
+      else if(n==='count')tone(660,t,0.12,'square',0.22);
+      else if(n==='go'){tone(523,t,0.1,'square',0.25);tone(784,t+0.08,0.1,'square',0.25);tone(1046,t+0.16,0.22,'square',0.25);}
+      else if(n==='round')[0,4,7].forEach((m,i)=>tone(st(m)*2,t+i*0.07,0.16,'square',0.2));
+      else if(n==='win')[0,4,7,12,16,19].forEach((m,i)=>tone(st(m)*2,t+i*0.09,0.3,'square',0.22));
+    }};
+})();
+
+/* ============================================================
+   BACKGROUND + PARTICLES
+   ============================================================ */
+let bgScroll=0;
+function drawBackground(){
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#1b2550');g.addColorStop(0.5,'#2a3a6e');g.addColorStop(1,'#46639a');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(255,255,255,.5)';
+  for(let i=0;i<36;i++){const sx=(i*97.3-bgScroll*0.2)%W,sy=(i*53)%(H*0.5);
+    ctx.globalAlpha=0.3+0.5*Math.abs(Math.sin(i+bgScroll*0.01));ctx.fillRect((sx+W)%W,sy,2,2);}
+  ctx.globalAlpha=1;
+}
+function splitTint(){ // subtle blue/red halves
+  ctx.fillStyle='rgba(90,140,255,0.10)';ctx.fillRect(0,0,W/2,H);
+  ctx.fillStyle='rgba(255,110,150,0.10)';ctx.fillRect(W/2,0,W/2,H);
+  ctx.strokeStyle='rgba(255,255,255,.25)';ctx.lineWidth=2;ctx.setLineDash([8,8]);
+  ctx.beginPath();ctx.moveTo(W/2,0);ctx.lineTo(W/2,H);ctx.stroke();ctx.setLineDash([]);
+}
+let particles=[],confetti=[];
+function burst(x,y,col,n=12,sp=3){for(let i=0;i<n;i++){const a=Math.random()*6.28,s=1+Math.random()*sp;
+  particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:26,max:26,col});}}
+function updateParticles(dt){for(const p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=0.12*dt;p.life-=dt;}
+  particles=particles.filter(p=>p.life>0);}
+function drawParticles(){for(const p of particles){ctx.globalAlpha=p.life/p.max;ctx.fillStyle=p.col;
+  ctx.beginPath();ctx.arc(p.x,p.y,3*(p.life/p.max)+1,0,Math.PI*2);ctx.fill();}ctx.globalAlpha=1;}
+function startConfetti(){confetti=[];const cs=['#ffe27a','#5a8cff','#ff6e96','#5ad17a','#b25ad1','#fff'];
+  for(let i=0;i<150;i++)confetti.push({x:Math.random()*W,y:-Math.random()*H,vx:(Math.random()-0.5)*2,
+    vy:2+Math.random()*4,r:4+Math.random()*5,col:cs[i%cs.length],rot:Math.random()*6,vr:(Math.random()-0.5)*0.3});}
+function updateConfetti(dt){for(const c of confetti){c.x+=c.vx*dt;c.y+=c.vy*dt;c.rot+=c.vr*dt;if(c.y>H+10){c.y=-10;c.x=Math.random()*W;}}}
+function drawConfetti(){for(const c of confetti){ctx.save();ctx.translate(c.x,c.y);ctx.rotate(c.rot);
+  ctx.fillStyle=c.col;ctx.fillRect(-c.r/2,-c.r/2,c.r,c.r*0.6);ctx.restore();}}
+
+/* ============================================================
+   STATE + SERIES
+   ============================================================ */
+const ST={TITLE:0,SELECT:1,INTRO:2,PLAY:3,RESULT:4,CHAMP:5};
+let state=ST.TITLE;
+let sel=[null,null];
+let series=null;     // {types,score,rounds,idx}
+let game=null;       // current minigame instance
+let phaseT=0;        // timer for INTRO/RESULT
+let roundWinner=-1;
+let bigText='', bigSub='';
+
+const $=id=>document.getElementById(id);
+
+function laneX(p){ return p===0 ? W*0.25 : W*0.75; }
+
+/* ---- minigame registry (factory functions) ---- */
+const MINIGAMES=[ makeDash, makeReaction, makeCatch, makeTug, makeBalloon ];
+const MG_NAMES=['🏃 마하 대시','⚡ 반응 결투','🎯 잡아라!','🪢 줄다리기','🎈 풍선 불기'];
+const MG_HOW=[
+  '빠르게 연타해서 결승선까지 먼저 도착!',
+  '"지금!"이 뜨면 먼저 탭! 미리 누르면 실격!',
+  '몬스터볼이 나오면 탭, 빨간 폭탄은 누르지 마!',
+  '연타해서 가운데 공을 내 쪽으로 끌어와!',
+  '크게 불되 터지기 직전에 멈춰! 터지면 패배!'];
+
+function startSeries(){
+  Audio2.start(); ensureSprites(sel[0]); ensureSprites(sel[1]);
+  // pick 5 distinct minigames (shuffled)
+  const order=[...Array(MINIGAMES.length).keys()];
+  for(let i=order.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
+  const rounds=order.slice(0,5);
+  series={types:[sel[0],sel[1]],score:[0,0],rounds,idx:0};
+  ['title','select','champ'].forEach(id=>$(id).classList.add('hidden'));
+  $('topbar').classList.remove('hidden');
+  toIntro();
+}
+function toIntro(){ state=ST.INTRO; phaseT=0; Audio2.sfx('round');
+  const mi=series.rounds[series.idx];
+  bigText=`${series.idx+1}번째 게임`; bigSub=MG_NAMES[mi]; }
+function startGame(){ const mi=series.rounds[series.idx]; game=MINIGAMES[mi](); game.start(); state=ST.PLAY; }
+function endGame(w){ roundWinner=w; if(w>=0) series.score[w]++;
+  if(w>=0){Audio2.sfx('score'); burst(laneX(w),H*0.4,w===0?P1COL:P2COL,24,4);}
+  state=ST.RESULT; phaseT=0; }
+function nextRound(){
+  if(series.score[0]>=3||series.score[1]>=3){ toChamp(); return; }
+  if(series.idx>=series.rounds.length-1){
+    if(series.score[0]===series.score[1]){ // tie-break: add a random extra round
+      const mi=Math.floor(Math.random()*MINIGAMES.length); series.rounds.push(mi); series.idx++; toIntro(); return; }
+    toChamp(); return;
+  }
+  series.idx++; toIntro();
+}
+function toChamp(){ state=ST.CHAMP; startConfetti(); Audio2.sfx('win');
+  const c = series.score[0]>series.score[1]?0:1;
+  const t=TYPES[series.types[c]];
+  $('champName').textContent=`🏆 ${c===0?'1P':'2P'} 우승!`;
+  $('champName').style.color=c===0?'#9fbfff':'#ffb0c6';
+  $('champSub').textContent=`${series.score[0]} : ${series.score[1]} · ${t[0]} 폼 아르세우스 챔피언!`;
+  $('champ').classList.remove('hidden'); $('topbar').classList.add('hidden');
+}
+
+/* ============================================================
+   SCOREBOARD + shared overlays drawn on canvas
+   ============================================================ */
+function drawScoreboard(){
+  if(!series)return;
+  const y=18, r=9;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  // P1
+  ctx.fillStyle=P1COL;ctx.font='bold 16px Trebuchet MS';ctx.textAlign='left';
+  ctx.fillText('1P',14,y+6);
+  for(let i=0;i<3;i++){const x=44+i*20;ctx.beginPath();ctx.arc(x,y+6,r,0,Math.PI*2);
+    ctx.fillStyle=i<series.score[0]?'#ffd24d':'rgba(255,255,255,.18)';ctx.fill();}
+  // P2
+  ctx.fillStyle=P2COL;ctx.textAlign='right';ctx.fillText('2P',W-14,y+6);
+  for(let i=0;i<3;i++){const x=W-44-i*20;ctx.beginPath();ctx.arc(x,y+6,r,0,Math.PI*2);
+    ctx.fillStyle=i<series.score[1]?'#ffd24d':'rgba(255,255,255,.18)';ctx.fill();}
+  // round indicator
+  ctx.fillStyle='rgba(255,255,255,.85)';ctx.font='bold 13px Trebuchet MS';ctx.textAlign='center';
+  ctx.fillText(`${series.idx+1} / ${series.rounds.length}  ·  ${MG_NAMES[series.rounds[series.idx]]}`,W/2,y+6);
+}
+function drawCenterCard(title,sub,sub2){
+  ctx.fillStyle='rgba(8,12,26,0.62)';ctx.fillRect(0,0,W,H);
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='#fff';ctx.font=`bold ${Math.floor(Math.min(W,H)*0.07)}px Trebuchet MS`;
+  ctx.shadowColor='#ffe27a';ctx.shadowBlur=20;ctx.fillText(title,W/2,H*0.4);ctx.shadowBlur=0;
+  if(sub){ctx.fillStyle='#ffe27a';ctx.font=`bold ${Math.floor(Math.min(W,H)*0.055)}px Trebuchet MS`;ctx.fillText(sub,W/2,H*0.52);}
+  if(sub2){ctx.fillStyle='rgba(255,255,255,.85)';ctx.font=`${Math.floor(Math.min(W,H)*0.032)}px Trebuchet MS`;ctx.fillText(sub2,W/2,H*0.62);}
+}
+
+/* ============================================================
+   MINIGAMES  (each: {start, tap(p), update(dt), draw()})
+   Call endGame(winner) when finished.
+   ============================================================ */
+// 1) DASH — vertical climb mash
+function makeDash(){
+  let pos=[0,0],vel=[0,0],ph=[0,0],t=0,DUR=22;
+  return {
+    timed:true,
+    start(){pos=[0,0];vel=[0,0];ph=[0,0];t=0;},
+    tap(p){vel[p]=Math.min(14,vel[p]+1.9);Audio2.sfx('climb');},
+    update(dt){t+=dt/60;
+      for(let p=0;p<2;p++){vel[p]*=Math.pow(0.94,dt);pos[p]+=vel[p]*dt*0.0016;
+        if(vel[p]>0.5)ph[p]+=(0.2+vel[p]*0.04)*dt;
+        if(pos[p]>=1){pos[p]=1;endGame(p);return;}}
+      if(t>=DUR){endGame(pos[0]===pos[1]?-1:(pos[0]>pos[1]?0:1));}},
+    draw(){
+      for(let p=0;p<2;p++){const cxp=laneX(p),top=H*0.16,bot=H*0.84;
+        // track
+        ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=3;ctx.setLineDash([10,12]);
+        ctx.beginPath();ctx.moveTo(cxp,bot);ctx.lineTo(cxp,top);ctx.stroke();ctx.setLineDash([]);
+        // finish
+        for(let i=0;i<8;i++){ctx.fillStyle=i%2?'#fff':'#111';ctx.fillRect(cxp-28+i*7,top-14,7,8);}
+        ctx.fillStyle='#ffe27a';ctx.font='bold 13px Trebuchet MS';ctx.textAlign='center';ctx.fillText('GOAL',cxp,top-22);
+        const y=bot-(bot-top)*pos[p];
+        drawArceus(cxp,y,Math.min(0.62,W/1400+0.3),series.types[p],ph[p],vel[p]>0.4);
+        ctx.fillStyle='#fff';ctx.font='bold 12px Trebuchet MS';ctx.fillText((p?'2P':'1P'),cxp,y-Math.min(0.62,W/1400+0.3)*120);}
+      ctx.fillStyle='rgba(255,255,255,.9)';ctx.font='bold 14px Trebuchet MS';ctx.textAlign='center';
+      ctx.fillText('연타!',W/2,H*0.5);
+      drawTimer(DUR-t);}
+  };
+}
+// 2) REACTION — wait then tap
+function makeReaction(){
+  let phase='wait',t=0,goAt=1.5+Math.random()*3.2;
+  return {
+    timed:false,
+    start(){phase='wait';t=0;goAt=1.5+Math.random()*3.2;},
+    tap(p){ if(phase==='wait'){phase='done';Audio2.sfx('foul');endGame(1-p);}
+      else if(phase==='go'){phase='done';Audio2.sfx('score');endGame(p);} },
+    update(dt){t+=dt/60; if(phase==='wait'&&t>=goAt){phase='go';t=0;Audio2.sfx('go');}},
+    draw(){
+      if(phase==='wait'){ctx.fillStyle='#8a2530';ctx.fillRect(0,0,W,H);
+        ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.font=`bold ${Math.floor(Math.min(W,H)*0.08)}px Trebuchet MS`;ctx.fillText('준비…',W/2,H*0.45);
+        ctx.font=`${Math.floor(Math.min(W,H)*0.035)}px Trebuchet MS`;ctx.fillStyle='rgba(255,255,255,.8)';
+        ctx.fillText('아직 누르지 마세요!',W/2,H*0.56);}
+      else if(phase==='go'){ctx.fillStyle='#1f8a3b';ctx.fillRect(0,0,W,H);
+        ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.font=`bold ${Math.floor(Math.min(W,H)*0.12)}px Trebuchet MS`;ctx.fillText('지금 탭!',W/2,H*0.46);}
+    }
+  };
+}
+// 3) CATCH — tap ball, avoid bomb
+function makeCatch(){
+  let kind=['none','none'],nx=[0,0],sc=[0,0],pen=[0,0],pop=[0,0],t=0,DUR=18;
+  function roll(p){const r=Math.random();kind[p]=r<0.6?'ball':(r<0.82?'none':'bomb');nx[p]=0.45+Math.random()*0.7;pop[p]=1;}
+  return {
+    timed:true,
+    start(){sc=[0,0];pen=[0,0];t=0;roll(0);roll(1);},
+    tap(p){ if(pen[p]>0)return;
+      if(kind[p]==='ball'){sc[p]++;Audio2.sfx('score');burst(laneX(p),H*0.45,'#5ad17a',8,2);kind[p]='none';nx[p]=0.25+Math.random()*0.4;}
+      else if(kind[p]==='bomb'){sc[p]=Math.max(0,sc[p]-1);pen[p]=0.6;Audio2.sfx('foul');burst(laneX(p),H*0.45,'#ff5a5a',10,3);kind[p]='none';nx[p]=0.5;}
+    },
+    update(dt){t+=dt/60;
+      for(let p=0;p<2;p++){if(pen[p]>0)pen[p]-=dt/60;nx[p]-=dt/60;pop[p]+=dt*0.02;if(nx[p]<=0)roll(p);}
+      if(t>=DUR)endGame(sc[0]===sc[1]?-1:(sc[0]>sc[1]?0:1));},
+    draw(){
+      for(let p=0;p<2;p++){const cxp=laneX(p),cy=H*0.46,sz=Math.min(W*0.13,80);
+        ctx.save();ctx.translate(cxp,cy);const s=Math.min(1.15,pop[p]);ctx.scale(s,s);
+        if(kind[p]==='ball'){ // Pokeball-ish (original)
+          ctx.fillStyle='#e8e8ee';ctx.beginPath();ctx.arc(0,0,sz,Math.PI,0);ctx.fill();
+          ctx.fillStyle='#ff5a5a';ctx.beginPath();ctx.arc(0,0,sz,0,Math.PI);ctx.fill();
+          ctx.fillStyle='#222';ctx.fillRect(-sz,-4,sz*2,8);
+          ctx.beginPath();ctx.arc(0,0,sz*0.32,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(0,0,sz*0.20,0,Math.PI*2);ctx.fill();
+        } else if(kind[p]==='bomb'){
+          ctx.fillStyle='#c0392b';ctx.beginPath();ctx.arc(0,0,sz,Math.PI,0);ctx.fill();
+          ctx.fillStyle='#e8e8ee';ctx.beginPath();ctx.arc(0,0,sz,0,Math.PI);ctx.fill();
+          ctx.fillStyle='#222';ctx.fillRect(-sz,-4,sz*2,8);
+          ctx.fillStyle='#fff';ctx.font=`bold ${sz}px Trebuchet MS`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('✕',0,2);
+        } else { ctx.fillStyle='rgba(255,255,255,.08)';ctx.beginPath();ctx.arc(0,0,sz*0.7,0,Math.PI*2);ctx.fill(); }
+        ctx.restore();
+        ctx.fillStyle='#fff';ctx.font='bold 22px Trebuchet MS';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(sc[p],cxp,H*0.72);
+        ctx.fillStyle=p?P2COL:P1COL;ctx.font='bold 13px Trebuchet MS';ctx.fillText(p?'2P':'1P',cxp,H*0.78);
+        if(pen[p]>0){ctx.fillStyle='rgba(255,80,80,.25)';ctx.fillRect(p?W/2:0,0,W/2,H);}
+      }
+      drawTimer(DUR-t);}
+  };
+}
+// 4) TUG — pull the ball to your side
+function makeTug(){
+  let r=0,t=0,DUR=20; // r in -1..1 ; <0 P1 side(left), >0 P2 side(right)
+  return {
+    timed:true,
+    start(){r=0;t=0;},
+    tap(p){ r += p===0 ? -0.035 : 0.035; Audio2.sfx('climb');
+      if(r<=-1){r=-1;endGame(0);} else if(r>=1){r=1;endGame(1);} },
+    update(dt){t+=dt/60; if(t>=DUR)endGame(r<0?0:(r>0?1:-1));},
+    draw(){
+      const midY=H*0.5, x=W/2 + r*(W*0.32);
+      // win zones
+      ctx.fillStyle='rgba(90,140,255,.16)';ctx.fillRect(0,0,W*0.18,H);
+      ctx.fillStyle='rgba(255,110,150,.16)';ctx.fillRect(W*0.82,0,W*0.18,H);
+      // rope
+      ctx.strokeStyle='#caa06a';ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(0,midY);ctx.lineTo(W,midY);ctx.stroke();
+      // two arceus pulling
+      drawArceus(W*0.12,midY+70,0.5,series.types[0],0,false);
+      drawArceus(W*0.88,midY+70,0.5,series.types[1],0,false);
+      // center ball
+      ctx.save();ctx.translate(x,midY);
+      ctx.fillStyle='#ffd24d';ctx.shadowColor='#ffd24d';ctx.shadowBlur=18;
+      ctx.beginPath();ctx.arc(0,0,22,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+      ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(-6,-6,6,0,Math.PI*2);ctx.fill();ctx.restore();
+      // center line
+      ctx.strokeStyle='rgba(255,255,255,.3)';ctx.lineWidth=2;ctx.setLineDash([6,8]);
+      ctx.beginPath();ctx.moveTo(W/2,0);ctx.lineTo(W/2,H);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle='#fff';ctx.font='bold 14px Trebuchet MS';ctx.textAlign='center';ctx.fillText('연타로 당겨라!',W/2,H*0.2);
+      drawTimer(DUR-t);}
+  };
+}
+// 5) BALLOON — inflate, stop before pop
+function makeBalloon(){
+  let sz=[0.25,0.25],popped=[false,false],best=[0.25,0.25],thr=[0,0],t=0,DUR=14,wobble=0;
+  return {
+    timed:true,
+    start(){sz=[0.25,0.25];popped=[false,false];best=[0.25,0.25];t=0;
+      thr=[0.8+Math.random()*0.45,0.8+Math.random()*0.45];},
+    tap(p){ if(popped[p])return; sz[p]+=0.045; best[p]=Math.max(best[p],sz[p]); Audio2.sfx('tap');
+      if(sz[p]>=thr[p]){popped[p]=true;Audio2.sfx('pop');burst(laneX(p),H*0.45,'#ffd24d',26,5);} },
+    update(dt){t+=dt/60;wobble+=dt;
+      if(t>=DUR||(popped[0]&&popped[1])) finish();},
+    draw(){
+      for(let p=0;p<2;p++){const cxp=laneX(p),cy=H*0.5,base=Math.min(W*0.16,120);
+        const near=sz[p]/thr[p];
+        if(!popped[p]){
+          const rad=base*(0.5+sz[p]*0.9), wob=Math.sin(wobble*0.3+p)*3;
+          const col=near>0.82?'#ff6b6b':(near>0.62?'#ffb24d':(p?P2COL:'#6fa8ff'));
+          ctx.save();ctx.translate(cxp,cy-rad*0.2);
+          ctx.fillStyle=col;ctx.beginPath();ctx.ellipse(0,0,rad+wob,rad*1.12,0,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='rgba(255,255,255,.5)';ctx.beginPath();ctx.ellipse(-rad*0.3,-rad*0.35,rad*0.18,rad*0.26,0,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(-6,rad*1.05);ctx.lineTo(6,rad*1.05);ctx.lineTo(0,rad*1.05+12);ctx.closePath();ctx.fill();
+          ctx.strokeStyle='rgba(255,255,255,.4)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,rad*1.05+12);ctx.lineTo(0,rad*1.05+40);ctx.stroke();
+          ctx.restore();
+          if(near>0.82){ctx.fillStyle='#fff';ctx.font='bold 16px Trebuchet MS';ctx.textAlign='center';ctx.fillText('⚠ 위험!',cxp,cy-rad-10);}
+        } else {
+          ctx.fillStyle='#fff';ctx.font=`bold ${Math.floor(base*0.5)}px Trebuchet MS`;ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillText('💥',cxp,cy);ctx.font='bold 18px Trebuchet MS';ctx.fillStyle='#ff8080';ctx.fillText('펑! 터짐',cxp,cy+base*0.4);
+        }
+        ctx.fillStyle=p?P2COL:P1COL;ctx.font='bold 14px Trebuchet MS';ctx.textAlign='center';ctx.fillText(p?'2P':'1P',cxp,H*0.86);
+      }
+      ctx.fillStyle='rgba(255,255,255,.9)';ctx.font='bold 14px Trebuchet MS';ctx.textAlign='center';
+      ctx.fillText('크게 불되 터지기 전에 멈춰!',W/2,H*0.16);
+      drawTimer(DUR-t);}
+  };
+  function finish(){ // non-popped beats popped; bigger best wins
+    let w;
+    if(popped[0]&&popped[1]) w = best[0]===best[1]?-1:(best[0]>best[1]?0:1);
+    else if(popped[0]) w=1; else if(popped[1]) w=0;
+    else w = sz[0]===sz[1]?-1:(sz[0]>sz[1]?0:1);
+    endGame(w);
+  }
+}
+
+function drawTimer(left){
+  if(left==null)return; left=Math.max(0,left);
+  ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(W/2-46,H-46,92,30);
+  ctx.fillStyle=left<4?'#ff7a7a':'#fff';ctx.font='bold 20px Trebuchet MS';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('⏱ '+left.toFixed(1),W/2,H-31);
+}
+
+/* ============================================================
+   MAIN LOOP
+   ============================================================ */
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(2,(now-last)/16.67);last=now;bgScroll+=2*dt;
+  ctx.clearRect(0,0,W,H);drawBackground();
+  if(state===ST.PLAY){
+    if(game.constructor!==Object){} // noop
+    if(game.split!==false) splitTint();
+    game.update(dt);
+    if(game.draw) game.draw();
+    drawScoreboard();
+    updateParticles(dt);drawParticles();
+  } else if(state===ST.INTRO){
+    splitTint();
+    if(game&&game.draw){} // none
+    drawScoreboard();
+    phaseT+=dt/60;
+    const cd=Math.ceil(2.2-phaseT);
+    drawCenterCard(bigText, bigSub, cd>0?('시작까지 '+cd):'시작!');
+    if(phaseT>=2.2) startGame();
+  } else if(state===ST.RESULT){
+    splitTint();
+    if(game&&game.draw) game.draw();
+    drawScoreboard();
+    updateParticles(dt);drawParticles();
+    phaseT+=dt/60;
+    const wtxt = roundWinner<0?'무승부!':(roundWinner===0?'1P 승리!':'2P 승리!');
+    const col = roundWinner<0?'#fff':(roundWinner===0?'#9fbfff':'#ffb0c6');
+    ctx.fillStyle='rgba(8,12,26,0.55)';ctx.fillRect(0,0,W,H);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=col;ctx.font=`bold ${Math.floor(Math.min(W,H)*0.09)}px Trebuchet MS`;
+    ctx.shadowColor=col;ctx.shadowBlur=18;ctx.fillText(wtxt,W/2,H*0.42);ctx.shadowBlur=0;
+    ctx.fillStyle='#ffe27a';ctx.font=`bold ${Math.floor(Math.min(W,H)*0.06)}px Trebuchet MS`;
+    ctx.fillText(`${series.score[0]} : ${series.score[1]}`,W/2,H*0.55);
+    if(phaseT>=2.3) nextRound();
+  } else if(state===ST.CHAMP){
+    updateConfetti(dt);drawConfetti();
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ============================================================
+   INPUT
+   ============================================================ */
+function tap(p){ if(state===ST.PLAY && game) game.tap(p); }
+cv.addEventListener('pointerdown',e=>{e.preventDefault();
+  if(state===ST.PLAY) tap(e.clientX<W/2?0:1); });
+window.addEventListener('keydown',e=>{ if(e.repeat)return;
+  if(e.key==='f'||e.key==='F')tap(0); if(e.key==='j'||e.key==='J')tap(1); });
+
+/* ============================================================
+   UI FLOW
+   ============================================================ */
+function buildGrids(){
+  for(let pl=0;pl<2;pl++){const grid=$('grid'+(pl+1));grid.innerHTML='';
+    TYPES.forEach((t,idx)=>{const d=document.createElement('div');d.className='swatch';
+      d.style.background=`radial-gradient(circle at 50% 35%, ${shade(t[1],0.25)}, #232838 75%)`;
+      const url=spriteDataURL(idx).replace(/"/g,'&quot;');
+      d.innerHTML=`<img src="${url}" style="position:absolute;inset:0;width:120%;height:120%;left:-10%;top:0;object-fit:contain;pointer-events:none;z-index:1"><span>${t[0]}</span>`;
+      d.addEventListener('pointerdown',()=>selectType(pl,idx,d));grid.appendChild(d);});}
+}
+function selectType(pl,idx,el){ Audio2.start();Audio2.sfx('tap');sel[pl]=idx;
+  $('grid'+(pl+1)).querySelectorAll('.swatch').forEach(s=>s.classList.remove('sel'));el.classList.add('sel');
+  $('pick'+(pl+1)).textContent='선택: '+TYPES[idx][0]+' 폼'; }
+function show(which){ ['title','select','champ'].forEach(id=>$(id).classList.add('hidden'));
+  if(which)$(which).classList.remove('hidden');
+  if(which==='select'){state=ST.SELECT;buildGrids();
+    if(sel[0]!=null)$('pick1').textContent='선택: '+TYPES[sel[0]][0]+' 폼';
+    if(sel[1]!=null)$('pick2').textContent='선택: '+TYPES[sel[1]][0]+' 폼';}
+  if(which==='title')state=ST.TITLE;
+  $('topbar').classList.add('hidden'); }
+
+$('startBtn').addEventListener('click',()=>{Audio2.start();show('select');});
+$('howBtn').addEventListener('click',()=>$('howText').classList.toggle('hidden'));
+$('backBtn').addEventListener('click',()=>show('title'));
+$('goBtn').addEventListener('click',()=>{ if(sel[0]===null)sel[0]=0; if(sel[1]===null)sel[1]=2; startSeries(); });
+$('rematchBtn').addEventListener('click',()=>startSeries());
+$('changeBtn').addEventListener('click',()=>show('select'));
+$('muteBtn').addEventListener('click',()=>{const m=!Audio2.isMuted();Audio2.setMuted(m);
+  $('muteBtn').textContent=m?'🔇 음소거':'🔊 소리';});
+</script>
+</body>
+</html>
